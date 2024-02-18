@@ -3,6 +3,9 @@ import cv2
 import matplotlib.pyplot as plt
 from fastai.vision.all import *
 import gradio as gr
+import moviepy.editor as mp
+import speech_recognition as sr
+
 
 # Emotion and Sentiment learners
 learn_emotion = load_learner('emotions_vgg19.pkl')
@@ -24,6 +27,10 @@ def predict(img):
 def process_video(video):
     cap = cv2.VideoCapture(video)
     fps = cap.get(cv2.CAP_PROP_FPS)
+
+    emotions_total = {label: 0.0 for label in learn_emotion_labels}
+    sentiments_total = {label: 0.0 for label in learn_sentiment_labels}
+    total_frames = 0
     outputs = []
 
     frame_count = 0
@@ -38,6 +45,13 @@ def process_video(video):
 
             # Predict emotions and sentiments
             emotions, sentiments = predict(pil_img)
+
+             # Aggregate emotions and sentiments
+            for label in emotions_total:
+                emotions_total[label] += emotions[label]
+            for label in sentiments_total:
+                sentiments_total[label] += sentiments[label]
+            total_frames += 1
 
             # Plot and save the results
             fig, ax = plt.subplots(figsize=(6, 3), nrows=1, ncols=2)
@@ -66,7 +80,22 @@ def process_video(video):
         frame_count += 1
 
     cap.release()
-    return outputs
+    emotions_avg = {label: emotions_total[label] / total_frames for label in emotions_total}
+    sentiments_avg = {label: sentiments_total[label] / total_frames for label in sentiments_total}
+    
+    # Recommend based on emotions and sentiments
+    recommendation = recommend(emotions_avg, sentiments_avg)  # Implement this function according to your recommendation logic
+    # return recommendation
+    return recommendation
+
+def recommend(emotions, sentiments):
+    # Example recommendation logic: recommend based on the highest emotion probability
+    dominant_sentiment = max(sentiments, key=sentiments.get)
+    if dominant_sentiment == "positive" or "negative":
+        return "The health care professional seems too emotional. Consider taking actions accordingly."
+    elif dominant_sentiment == "neutral":
+        return "The health care professional did a good job remaining neutral!"
+
 
 # Gradio interface
 title = "Facial Emotion and Sentiment Analyzer for Video Frames"
@@ -74,7 +103,7 @@ description = "This tool captures a frame every 5 seconds from the uploaded vide
 
 iface = gr.Interface(fn=process_video,
                      inputs=gr.Video(label="Upload Video"),
-                     outputs=gr.Gallery(label="Analyzed Frames and Results"),
+                     outputs=gr.TextArea(label="Reccomendation"),
                      title=title,
                      description=description,
                      allow_flagging='never')
