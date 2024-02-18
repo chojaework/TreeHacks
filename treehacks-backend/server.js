@@ -1,32 +1,37 @@
 const express = require('express');
+const { PythonShell } = require('python-shell');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+
 const app = express();
-const OpenAI = require('openai-api');
+const upload = multer({ dest: 'uploads/' });
 
-app.use(express.json()); // Middleware to parse JSON bodies
+app.post('/api/process_image', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).send('No image uploaded.');
+  }
 
-const OPENAI_API_KEY = 'your_openai_api_key_here'; // Replace with your actual OpenAI API key
-const openai = new OpenAI(OPENAI_API_KEY);
+  const options = {
+    mode: 'text',
+    pythonPath: 'python', // Python 설치 경로에 따라 변경 가능
+    scriptPath: './', // Python 스크립트 위치
+    args: [req.file.path] // Python 스크립트로 전달할 인자
+  };
 
-
-
-
-app.post('/ask', async (req, res) => {
-    const prompt = req.body.prompt;
-
-    try {
-        const gptResponse = await openai.createCompletion({
-            engine: 'davinci', // You can use other engines as needed
-            prompt: prompt,
-            max_tokens: 150,
-            temperature: 0.9,
-        });
-
-        res.json({ message: gptResponse.data.choices[0].text.trim() });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error communicating with OpenAI API' });
+  PythonShell.run('process_image.py', options, (err, results) => {
+    if (err) {
+      console.error(err);
+      res.status(500).send('Error processing image.');
+    } else {
+      // Python 스크립트의 출력 결과 사용
+      res.send({ result: results[0] });
     }
+
+    // 임시 이미지 파일 삭제
+    fs.unlinkSync(req.file.path);
+  });
 });
 
-const PORT = process.env.PORT || 5000; // Server port
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const port = 5000;
+app.listen(port, () => console.log(`Server running on port ${port}`));
